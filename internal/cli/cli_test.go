@@ -24,18 +24,27 @@ func executeForTest(t *testing.T, args ...string) (string, error) {
 	}
 	os.Stdout = writer
 	t.Cleanup(func() { os.Stdout = oldStdout })
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	readDone := make(chan readResult, 1)
+	go func() {
+		data, err := io.ReadAll(reader)
+		readDone <- readResult{data: data, err: err}
+	}()
 	options := &rootOptions{timeout: 0, version: "test"}
 	command := newRootCommand(options)
 	command.SetArgs(args)
 	executeErr := command.Execute()
 	_ = writer.Close()
 	os.Stdout = oldStdout
-	data, readErr := io.ReadAll(reader)
+	result := <-readDone
 	_ = reader.Close()
-	if readErr != nil {
-		t.Fatal(readErr)
+	if result.err != nil {
+		t.Fatal(result.err)
 	}
-	return string(data), executeErr
+	return string(result.data), executeErr
 }
 
 func configureServer(t *testing.T, server *httptest.Server) {
