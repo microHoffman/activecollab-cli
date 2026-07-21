@@ -35,6 +35,7 @@ npx skills add https://github.com/microHoffman/agent-skills \
 - upload and safely download task/comment attachments
 - preview mutations with `--dry-run`
 - emit machine-readable output with `--json`
+- issue and store self-hosted API tokens through the OS credential store
 
 Deletion, arbitrary raw API requests, invoicing, and time tracking are outside
 the initial scope.
@@ -44,7 +45,7 @@ the initial scope.
 With [mise](https://mise.jdx.dev/dev-tools/backends/github.html):
 
 ```bash
-mise use --global github:microHoffman/activecollab-cli@0.1.0
+mise use --global github:microHoffman/activecollab-cli@0.2.0
 activecollab version
 ```
 
@@ -56,7 +57,7 @@ Exact Linux, macOS, Windows, and source installation instructions are in
 Go users can install from source:
 
 ```bash
-go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.1.0
+go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.2.0
 ```
 
 ## Documentation
@@ -70,19 +71,44 @@ go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.1.0
 
 ## Configuration
 
-Create an API token in ActiveCollab, then export the complete API base URL and
-token:
+For a self-hosted installation, pass the complete API-v1 URL and log in:
+
+```bash
+activecollab auth login \
+  --url https://activecollab.example.com/api/v1
+activecollab info
+```
+
+The login command prompts for the account email and a hidden password, requests
+an API token from the self-hosted server, and saves that token in the operating
+system credential store. Only the non-secret server URL and account email are
+written to the CLI configuration file. HTTPS is required unless
+`--allow-insecure-http` is explicitly passed. This follows ActiveCollab's
+[self-hosted authentication flow](https://activecollab.com/help/books/self-hosted/self-hosted-api-authentication).
+
+If ActiveCollab already issued a token, pipe it from a secret manager instead
+of putting it in shell history:
+
+```bash
+secret-manager-command | activecollab auth login \
+  --url https://activecollab.example.com/api/v1 \
+  --token-stdin
+```
+
+Use `activecollab auth status` to inspect the active source without exposing
+the token. `activecollab auth logout` removes the local credential but does not
+revoke it on the server.
+
+For CI, headless hosts without an OS credential store, or ephemeral sessions,
+environment variables remain supported and override saved credentials:
 
 ```bash
 export ACTIVECOLLAB_URL="https://activecollab.example.com/api/v1"
 export ACTIVECOLLAB_TOKEN="..."
-
-activecollab info
 ```
 
-The token is read only from the environment. It is not accepted as a command
-argument, written to disk, or included in diagnostic output. Prefer HTTPS so
-the token is encrypted in transit.
+Never pass a password or token as a command-line argument, commit it, or paste
+it into an agent conversation.
 
 ## Examples
 

@@ -17,6 +17,12 @@ import (
 
 func executeForTest(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	options := &rootOptions{timeout: 0, version: "test"}
+	return executeWithOptionsForTest(t, options, args...)
+}
+
+func executeWithOptionsForTest(t *testing.T, options *rootOptions, args ...string) (string, error) {
+	t.Helper()
 	oldStdout := os.Stdout
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -33,7 +39,6 @@ func executeForTest(t *testing.T, args ...string) (string, error) {
 		data, err := io.ReadAll(reader)
 		readDone <- readResult{data: data, err: err}
 	}()
-	options := &rootOptions{timeout: 0, version: "test"}
 	command := newRootCommand(options)
 	command.SetArgs(args)
 	executeErr := command.Execute()
@@ -54,7 +59,7 @@ func configureServer(t *testing.T, server *httptest.Server) {
 }
 
 func TestCommandGroupsRejectUnknownSubcommands(t *testing.T) {
-	groups := []string{"project", "user", "task-list", "task", "comment", "subtask", "attachment"}
+	groups := []string{"auth", "project", "user", "task-list", "task", "comment", "subtask", "attachment"}
 	for _, group := range groups {
 		t.Run(group, func(t *testing.T) {
 			_, err := executeForTest(t, group, "not-a-command")

@@ -7,20 +7,20 @@ Release binaries are self-contained and do not require Go at runtime.
 Install globally:
 
 ```bash
-mise use --global github:microHoffman/activecollab-cli@0.1.0
+mise use --global github:microHoffman/activecollab-cli@0.2.0
 activecollab version
 ```
 
 Omit `--global` to pin the CLI in a project's `mise.toml`:
 
 ```bash
-mise use github:microHoffman/activecollab-cli@0.1.0
+mise use github:microHoffman/activecollab-cli@0.2.0
 ```
 
 Upgrade by selecting a newer version with `mise use`. Remove it with:
 
 ```bash
-mise uninstall github:microHoffman/activecollab-cli@0.1.0
+mise uninstall github:microHoffman/activecollab-cli@0.2.0
 ```
 
 ## Linux without mise
@@ -28,7 +28,7 @@ mise uninstall github:microHoffman/activecollab-cli@0.1.0
 Choose `amd64` for x86-64 or `arm64` for 64-bit ARM:
 
 ```bash
-version=0.1.0
+version=0.2.0
 arch=amd64
 archive="activecollab_${version}_linux_${arch}.tar.gz"
 base="https://github.com/microHoffman/activecollab-cli/releases/download/v${version}"
@@ -52,7 +52,7 @@ rm "${HOME}/.local/bin/activecollab"
 Choose `arm64` for Apple Silicon or `amd64` for Intel:
 
 ```bash
-version=0.1.0
+version=0.2.0
 arch=arm64
 archive="activecollab_${version}_darwin_${arch}.tar.gz"
 base="https://github.com/microHoffman/activecollab-cli/releases/download/v${version}"
@@ -73,7 +73,7 @@ Remove `~/.local/bin/activecollab` to uninstall.
 Choose `amd64` for x86-64 or `arm64` for Windows on ARM. In PowerShell:
 
 ```powershell
-$Version = "0.1.0"
+$Version = "0.2.0"
 $Arch = "amd64"
 $Archive = "activecollab_${Version}_windows_${Arch}.zip"
 $Base = "https://github.com/microHoffman/activecollab-cli/releases/download/v${Version}"
@@ -98,23 +98,65 @@ Add `$HOME\bin` to the user `PATH`. Delete `activecollab.exe` to uninstall.
 With Go 1.25 or newer:
 
 ```bash
-go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.1.0
+go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.2.0
 ```
 
 Ensure `GOBIN`, or `$(go env GOPATH)/bin`, is on `PATH`.
 
 ## Configure ActiveCollab
 
-Set the complete API-v1 base URL and token in your shell or secret manager:
+For a self-hosted installation, pass its complete API-v1 base URL to the login
+command:
+
+```bash
+activecollab auth login \
+  --url https://activecollab.example.com/api/v1
+activecollab info
+```
+
+The CLI prompts for the account email and a hidden password, obtains a token
+from the self-hosted `/issue-token` endpoint, validates it, and stores it in the
+platform credential store. See ActiveCollab's
+[self-hosted authentication documentation](https://activecollab.com/help/books/self-hosted/self-hosted-api-authentication)
+for the server-side flow.
+
+Credential storage uses:
+
+- Linux: Secret Service-compatible keyring
+- macOS: Keychain
+- Windows: Credential Manager
+
+The CLI configuration file contains only the server URL and account email. If
+the platform credential store is unavailable, the command fails before asking
+for a password or issuing a token.
+
+To save an existing token, pipe it from a secret manager:
+
+```bash
+secret-manager-command | activecollab auth login \
+  --url https://activecollab.example.com/api/v1 \
+  --token-stdin
+```
+
+For CI and headless machines, set credentials in a protected environment. They
+override saved login credentials:
 
 ```bash
 export ACTIVECOLLAB_URL="https://activecollab.example.com/api/v1"
 export ACTIVECOLLAB_TOKEN="..."
-activecollab info
 ```
 
-Do not put a real token in repository files, shell history, issue descriptions,
-or command arguments.
+Inspect or remove saved credentials without displaying the token:
+
+```bash
+activecollab auth status
+activecollab auth logout
+```
+
+Logout removes only the local credential; revoke the corresponding API token
+in ActiveCollab when server-side invalidation is required. Do not put a real
+password or token in repository files, shell history, issue descriptions,
+command arguments, or agent conversations.
 
 After installation, see the [usage guide](usage.md), the
 [generated command reference](commands/activecollab.md), and the

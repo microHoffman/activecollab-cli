@@ -4,6 +4,6 @@ package cli
 
 import "os"
 
-func replaceDownloadedFile(temporaryName, output string) error {
+func replaceFile(temporaryName, output string) error {
 	return os.Rename(temporaryName, output)
 }

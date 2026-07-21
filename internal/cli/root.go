@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	activecollab "github.com/microHoffman/activecollab-cli"
@@ -14,10 +14,16 @@ import (
 )
 
 type rootOptions struct {
-	json    bool
-	dryRun  bool
-	timeout time.Duration
-	version string
+	json         bool
+	dryRun       bool
+	timeout      time.Duration
+	version      string
+	stdin        io.Reader
+	stderr       io.Writer
+	httpClient   *http.Client
+	secretStore  secretStore
+	configPath   string
+	promptSecret func(string) (string, error)
 }
 
 func Execute(version string) int {
@@ -38,7 +44,13 @@ func NewCommand(version string) *cobra.Command {
 }
 
 func newRootOptions(version string) *rootOptions {
-	return &rootOptions{timeout: 30 * time.Second, version: version}
+	return &rootOptions{
+		timeout:     30 * time.Second,
+		version:     version,
+		stdin:       os.Stdin,
+		stderr:      os.Stderr,
+		secretStore: keyringSecretStore{},
+	}
 }
 
 func newRootCommand(options *rootOptions) *cobra.Command {
@@ -47,12 +59,13 @@ func newRootCommand(options *rootOptions) *cobra.Command {
 		Short: "Work with ActiveCollab tasks from the command line",
 		Long: `activecollab is an unofficial command-line client for ActiveCollab tasks.
 
-Set ACTIVECOLLAB_URL to the complete /api/v1 base URL and set
-ACTIVECOLLAB_TOKEN to an API token before running commands that contact the
-server. Task commands accept either a full task URL or a numeric task ID with
---project. Commands that change state provide --dry-run to validate and display
-the intended operation without sending it.`,
-		Example: `  activecollab info
+For a self-hosted server, run activecollab auth login and pass its complete
+/api/v1 URL. Environment variables remain available for automation. Task
+commands accept either a full task URL or a numeric task ID with --project.
+Commands that change state provide --dry-run to validate and display the
+intended operation without sending it.`,
+		Example: `  activecollab auth login --url https://activecollab.example.com/api/v1
+  activecollab info
   activecollab task get https://activecollab.example.com/projects/7/tasks/22
   activecollab task update 22 --project 7 --name "Updated name" --dry-run
   activecollab task list --project 7 --json`,
@@ -61,6 +74,7 @@ the intended operation without sending it.`,
 		SilenceUsage:  true,
 	}
 	command.AddGroup(
+		&cobra.Group{ID: "auth", Title: "Authentication Commands:"},
 		&cobra.Group{ID: "discovery", Title: "Discovery Commands:"},
 		&cobra.Group{ID: "work", Title: "Work Item Commands:"},
 		&cobra.Group{ID: "other", Title: "Other Commands:"},
@@ -69,6 +83,8 @@ the intended operation without sending it.`,
 	command.SetCompletionCommandGroupID("other")
 	command.PersistentFlags().BoolVar(&options.json, "json", false, "emit stable JSON output")
 	command.PersistentFlags().DurationVar(&options.timeout, "timeout", options.timeout, "HTTP request timeout")
+	authCommand := newAuthCommand(options)
+	authCommand.GroupID = "auth"
 
 	discoveryCommands := []*cobra.Command{
 		newInfoCommand(options),
@@ -90,7 +106,11 @@ the intended operation without sending it.`,
 	}
 	versionCommand := newVersionCommand(options)
 	versionCommand.GroupID = "other"
-	command.AddCommand(append(append(discoveryCommands, workCommands...), versionCommand)...)
+	children := []*cobra.Command{authCommand}
+	children = append(children, discoveryCommands...)
+	children = append(children, workCommands...)
+	children = append(children, versionCommand)
+	command.AddCommand(children...)
 	return command
 }
 
@@ -132,20 +152,27 @@ that exact version is covered by this CLI's compatibility fixtures.`,
 }
 
 func (options *rootOptions) client() (*activecollab.Client, error) {
-	baseURL := strings.TrimSpace(os.Getenv("ACTIVECOLLAB_URL"))
-	token := strings.TrimSpace(os.Getenv("ACTIVECOLLAB_TOKEN"))
-	if baseURL == "" {
-		return nil, errors.New("ACTIVECOLLAB_URL is required (include the /api/v1 base path)")
-	}
-	if token == "" {
-		return nil, errors.New("ACTIVECOLLAB_TOKEN is required")
+	credentials, err := options.resolveCredentials()
+	if err != nil {
+		return nil, err
 	}
 	return activecollab.NewClient(activecollab.Config{
-		BaseURL:    baseURL,
-		Token:      token,
-		HTTPClient: &http.Client{Timeout: options.timeout},
+		BaseURL:    credentials.URL,
+		Token:      credentials.Token,
+		HTTPClient: options.newHTTPClient(),
 		UserAgent:  "activecollab-cli/" + options.version,
 	})
+}
+
+func (options *rootOptions) newHTTPClient() *http.Client {
+	if options.httpClient == nil {
+		return &http.Client{Timeout: options.timeout}
+	}
+	client := *options.httpClient
+	if client.Timeout == 0 {
+		client.Timeout = options.timeout
+	}
+	return &client
 }
 
 func writeOutput(asJSON bool, value any) error {

@@ -15,7 +15,7 @@ const (
 
 var moveFileEx = syscall.NewLazyDLL("kernel32.dll").NewProc("MoveFileExW")
 
-func replaceDownloadedFile(temporaryName, output string) error {
+func replaceFile(temporaryName, output string) error {
 	from, err := syscall.UTF16PtrFromString(temporaryName)
 	if err != nil {
 		return err

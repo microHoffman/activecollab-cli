@@ -152,7 +152,7 @@ func commitDownloadedFile(temporaryName, output string, force bool) error {
 
 func commitDownloadedFileWithLink(temporaryName, output string, force bool, link func(string, string) error) error {
 	if force {
-		if err := replaceDownloadedFile(temporaryName, output); err != nil {
+		if err := replaceFile(temporaryName, output); err != nil {
 			return fmt.Errorf("atomically replace downloaded attachment: %w", err)
 		}
 		return nil

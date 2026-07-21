@@ -6,15 +6,44 @@ argument, and flag.
 
 ## Configure and verify the server
 
-Set the complete API-v1 base URL and an API token in the environment:
+For self-hosted ActiveCollab, pass the complete API-v1 URL during interactive
+login:
+
+```bash
+activecollab auth login \
+  --url https://activecollab.example.com/api/v1
+```
+
+The CLI prompts for an email and hidden password, issues a token, validates it,
+and stores it in the OS credential store. It refuses to transmit credentials
+over plain HTTP unless `--allow-insecure-http` is explicitly passed.
+
+To use an existing API token, pipe it from a secret manager:
+
+```bash
+secret-manager-command | activecollab auth login \
+  --url https://activecollab.example.com/api/v1 \
+  --token-stdin
+```
+
+Check the active authentication source without displaying the token:
+
+```bash
+activecollab auth status
+activecollab auth status --json
+```
+
+Environment variables remain available for CI and hosts without an OS
+credential store. They override saved credentials:
 
 ```bash
 export ACTIVECOLLAB_URL="https://activecollab.example.com/api/v1"
 export ACTIVECOLLAB_TOKEN="..."
 ```
 
-Keep the token in a secret manager or protected shell environment. Do not pass
-it as a command-line argument or write it into repository files.
+Never pass a password or token as a command-line argument or place it in a
+repository or agent conversation. `activecollab auth logout` removes saved
+local credentials but does not revoke the server-side token.
 
 Verify connectivity and exact-version compatibility before other operations:
 
@@ -49,7 +78,7 @@ activecollab task get 22 --project 7
 ```
 
 Full URLs are preferable when they are available. The CLI verifies that their
-origin matches `ACTIVECOLLAB_URL` before attaching credentials.
+origin matches the configured ActiveCollab URL before attaching credentials.
 
 ## Read complete task context
 
