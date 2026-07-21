@@ -1,0 +1,8 @@
+/activecollab
+/activecollab.exe
+/dist/
+/.idea/
+/.vscode/
+*.test
+coverage.out
+.env

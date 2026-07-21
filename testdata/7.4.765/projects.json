@@ -1,0 +1,9 @@
+[
+  {
+    "id": 7,
+    "name": "Synthetic project",
+    "is_completed": false,
+    "is_trashed": false,
+    "future_additive_field": true
+  }
+]

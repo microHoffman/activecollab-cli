@@ -1,0 +1,17 @@
+[tools]
+go = "1.26.5"
+
+[tasks.test]
+run = "go test -race ./..."
+
+[tasks.docs]
+description = "Regenerate the Cobra command reference"
+run = "go run ./cmd/gen-docs"
+
+[tasks.docs-check]
+description = "Verify that generated command documentation is current"
+run = "go run ./cmd/gen-docs --check"
+
+[tasks.check]
+depends = ["docs-check"]
+run = "go vet ./... && go test -race ./..."

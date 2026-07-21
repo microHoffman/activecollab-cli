@@ -1,0 +1,63 @@
+{
+  "single": {
+    "id": 22,
+    "project_id": 7,
+    "task_number": 5,
+    "task_list_id": 3,
+    "name": "Synthetic implementation task",
+    "body": "Implement the documented behavior.",
+    "assignee_id": 9,
+    "is_completed": false,
+    "is_important": true,
+    "is_trashed": false,
+    "due_on": "2026-08-01",
+    "comments_count": 1,
+    "total_subtasks": 1,
+    "open_subtasks": 1,
+    "attachments": [
+      {
+        "id": 31,
+        "name": "specification.txt",
+        "mime_type": "text/plain",
+        "size": 42,
+        "download_url": "https://activecollab.example/attachments/31/download"
+      }
+    ],
+    "future_additive_field": "ignored safely"
+  },
+  "comments": [
+    {
+      "id": 41,
+      "parent_type": "Task",
+      "parent_id": 22,
+      "body": "Synthetic comment",
+      "body_plain_text": "Synthetic comment",
+      "created_by_id": 9,
+      "attachments": [
+        {
+          "id": 32,
+          "name": "comment-log.txt",
+          "mime_type": "text/plain",
+          "size": 12,
+          "download_url": "https://activecollab.example/attachments/32/download"
+        }
+      ]
+    }
+  ],
+  "subtasks": [
+    {
+      "id": 51,
+      "task_id": 22,
+      "project_id": 7,
+      "name": "Add contract tests",
+      "is_completed": false,
+      "due_on": null
+    }
+  ],
+  "task_list": {
+    "id": 3,
+    "project_id": 7,
+    "name": "Development",
+    "is_completed": false
+  }
+}

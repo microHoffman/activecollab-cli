@@ -1,0 +1,14 @@
+[
+  {
+    "code": "upload-code-one",
+    "name": "one.txt",
+    "mime_type": "text/plain",
+    "size": 3
+  },
+  {
+    "code": "upload-code-two",
+    "name": "two.txt",
+    "mime_type": "text/plain",
+    "size": 3
+  }
+]
