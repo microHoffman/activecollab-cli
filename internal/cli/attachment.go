@@ -186,7 +186,12 @@ func copyDownloadedFileNoReplace(temporaryName, output string) error {
 	if err != nil {
 		return fmt.Errorf("open temporary download: %w", err)
 	}
-	defer source.Close()
+	sourceOpen := true
+	defer func() {
+		if sourceOpen {
+			_ = source.Close()
+		}
+	}()
 
 	info, err := source.Stat()
 	if err != nil {
@@ -214,6 +219,11 @@ func copyDownloadedFileNoReplace(temporaryName, output string) error {
 		return fmt.Errorf("close downloaded attachment: %w", err)
 	}
 	removeIncomplete = false
+	sourceErr := source.Close()
+	sourceOpen = false
+	if sourceErr != nil {
+		return fmt.Errorf("close temporary download: %w", sourceErr)
+	}
 	if err := os.Remove(temporaryName); err != nil {
 		return fmt.Errorf("remove temporary download file: %w", err)
 	}
