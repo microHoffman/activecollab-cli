@@ -21,7 +21,6 @@ type rootOptions struct {
 	stdin        io.Reader
 	stderr       io.Writer
 	httpClient   *http.Client
-	secretStore  secretStore
 	configPath   string
 	promptSecret func(string) (string, error)
 }
@@ -45,11 +44,10 @@ func NewCommand(version string) *cobra.Command {
 
 func newRootOptions(version string) *rootOptions {
 	return &rootOptions{
-		timeout:     30 * time.Second,
-		version:     version,
-		stdin:       os.Stdin,
-		stderr:      os.Stderr,
-		secretStore: keyringSecretStore{},
+		timeout: 30 * time.Second,
+		version: version,
+		stdin:   os.Stdin,
+		stderr:  os.Stderr,
 	}
 }
 

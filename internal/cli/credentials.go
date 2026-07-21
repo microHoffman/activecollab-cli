@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,64 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/zalando/go-keyring"
 )
 
 const (
-	credentialService = "activecollab-cli"
-	maxConfigSize     = 64 << 10
+	credentialsSchemaVersion = 1
+	maxConfigSize            = 64 << 10
 )
 
-var errSecretNotFound = errors.New("credential not found")
-
-type secretStore interface {
-	Get(string) (string, error)
-	Set(string, string) error
-	Delete(string) error
-	Probe() error
-}
-
-type keyringSecretStore struct{}
-
-func (keyringSecretStore) Get(key string) (string, error) {
-	value, err := keyring.Get(credentialService, key)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return "", errSecretNotFound
-	}
-	return value, err
-}
-
-func (keyringSecretStore) Set(key, value string) error {
-	return keyring.Set(credentialService, key, value)
-}
-
-func (keyringSecretStore) Delete(key string) error {
-	err := keyring.Delete(credentialService, key)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return errSecretNotFound
-	}
-	return err
-}
-
-func (store keyringSecretStore) Probe() error {
-	random := make([]byte, 16)
-	if _, err := rand.Read(random); err != nil {
-		return fmt.Errorf("generate credential-store probe: %w", err)
-	}
-	key := "probe-" + hex.EncodeToString(random)
-	if err := store.Set(key, "probe"); err != nil {
-		return err
-	}
-	if err := store.Delete(key); err != nil {
-		return fmt.Errorf("remove credential-store probe: %w", err)
-	}
-	return nil
-}
-
 type storedConfiguration struct {
+	Version int    `json:"version"`
 	URL     string `json:"url"`
 	Account string `json:"account,omitempty"`
+	Token   string `json:"token"`
 }
 
 type resolvedCredentials struct {
@@ -99,33 +51,19 @@ func (options *rootOptions) resolveCredentials() (resolvedCredentials, error) {
 		}
 		if resolved.URL == configuration.URL {
 			resolved.Account = configuration.Account
+			if resolved.Token == "" {
+				resolved.Token = configuration.Token
+				resolved.Source = "credential_file"
+			}
 		}
 	}
 	if resolved.URL == "" {
 		return resolvedCredentials{}, errors.New("ActiveCollab URL is required; set ACTIVECOLLAB_URL or run `activecollab auth login --url <self-hosted-api-url>`")
 	}
 	if resolved.Token == "" {
-		token, err := options.secrets().Get(resolved.URL)
-		if errors.Is(err, errSecretNotFound) {
-			return resolvedCredentials{}, errors.New("ActiveCollab token is required; set ACTIVECOLLAB_TOKEN or run `activecollab auth login --url <self-hosted-api-url>`")
-		}
-		if err != nil {
-			return resolvedCredentials{}, fmt.Errorf("read ActiveCollab token from OS credential store: %w", err)
-		}
-		resolved.Token = strings.TrimSpace(token)
-		resolved.Source = "credential_store"
-	}
-	if resolved.Token == "" {
-		return resolvedCredentials{}, errors.New("ActiveCollab token is empty; log in again or set ACTIVECOLLAB_TOKEN")
+		return resolvedCredentials{}, errors.New("ActiveCollab token is required; set ACTIVECOLLAB_TOKEN or run `activecollab auth login --url <self-hosted-api-url>`")
 	}
 	return resolved, nil
-}
-
-func (options *rootOptions) secrets() secretStore {
-	if options.secretStore != nil {
-		return options.secretStore
-	}
-	return keyringSecretStore{}
 }
 
 func (options *rootOptions) configurationPath() (string, error) {
@@ -136,12 +74,43 @@ func (options *rootOptions) configurationPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("locate user configuration directory: %w", err)
 	}
-	return filepath.Join(directory, "activecollab", "config.json"), nil
+	return filepath.Join(directory, "activecollab", "credentials.json"), nil
+}
+
+func (options *rootOptions) prepareCredentialStorage() error {
+	path, err := options.configurationPath()
+	if err != nil {
+		return err
+	}
+	directory := filepath.Dir(path)
+	if err := prepareCredentialDirectory(directory); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(directory, ".credentials-probe-*")
+	if err != nil {
+		return fmt.Errorf("create credential-storage probe: %w", err)
+	}
+	temporaryName := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(temporaryName)
+		return fmt.Errorf("close credential-storage probe: %w", err)
+	}
+	if err := protectCredentialPath(temporaryName, false); err != nil {
+		_ = os.Remove(temporaryName)
+		return fmt.Errorf("protect credential-storage probe: %w", err)
+	}
+	if err := os.Remove(temporaryName); err != nil {
+		return fmt.Errorf("remove credential-storage probe: %w", err)
+	}
+	return nil
 }
 
 func (options *rootOptions) loadConfiguration() (storedConfiguration, error) {
 	path, err := options.configurationPath()
 	if err != nil {
+		return storedConfiguration{}, err
+	}
+	if err := verifyCredentialFile(path); err != nil {
 		return storedConfiguration{}, err
 	}
 	file, err := os.Open(path)
@@ -152,52 +121,39 @@ func (options *rootOptions) loadConfiguration() (storedConfiguration, error) {
 
 	data, err := io.ReadAll(io.LimitReader(file, maxConfigSize+1))
 	if err != nil {
-		return storedConfiguration{}, fmt.Errorf("read ActiveCollab configuration: %w", err)
+		return storedConfiguration{}, fmt.Errorf("read ActiveCollab credentials: %w", err)
 	}
 	if len(data) > maxConfigSize {
-		return storedConfiguration{}, errors.New("ActiveCollab configuration is unexpectedly large")
+		return storedConfiguration{}, errors.New("ActiveCollab credentials file is unexpectedly large")
 	}
 	var configuration storedConfiguration
 	if err := json.Unmarshal(data, &configuration); err != nil {
-		return storedConfiguration{}, fmt.Errorf("decode ActiveCollab configuration: %w", err)
+		return storedConfiguration{}, fmt.Errorf("decode ActiveCollab credentials: %w", err)
 	}
 	configuration.URL = strings.TrimSpace(configuration.URL)
 	configuration.Account = strings.TrimSpace(configuration.Account)
+	configuration.Token = strings.TrimSpace(configuration.Token)
+	if configuration.Version != credentialsSchemaVersion {
+		return storedConfiguration{}, fmt.Errorf("unsupported ActiveCollab credentials schema version %d", configuration.Version)
+	}
 	if configuration.URL == "" {
-		return storedConfiguration{}, errors.New("ActiveCollab configuration has no URL")
+		return storedConfiguration{}, errors.New("ActiveCollab credentials file has no URL")
+	}
+	if configuration.Token == "" {
+		return storedConfiguration{}, errors.New("ActiveCollab credentials file has no token; log in again")
 	}
 	return configuration, nil
 }
 
-func (options *rootOptions) saveLoginCredentials(configuration storedConfiguration, token string) error {
-	store := options.secrets()
-	previousConfiguration, previousConfigErr := options.loadConfiguration()
-	if previousConfigErr != nil && !errors.Is(previousConfigErr, os.ErrNotExist) {
-		return previousConfigErr
+func (options *rootOptions) saveLoginCredentials(configuration storedConfiguration) error {
+	configuration.Version = credentialsSchemaVersion
+	configuration.URL = strings.TrimSpace(configuration.URL)
+	configuration.Account = strings.TrimSpace(configuration.Account)
+	configuration.Token = strings.TrimSpace(configuration.Token)
+	if configuration.URL == "" || configuration.Token == "" {
+		return errors.New("ActiveCollab URL and token are required before saving credentials")
 	}
-
-	previousToken, previousTokenErr := store.Get(configuration.URL)
-	if previousTokenErr != nil && !errors.Is(previousTokenErr, errSecretNotFound) {
-		return fmt.Errorf("read existing ActiveCollab token from OS credential store: %w", previousTokenErr)
-	}
-	if err := store.Set(configuration.URL, token); err != nil {
-		return fmt.Errorf("save ActiveCollab token in OS credential store: %w", err)
-	}
-	if err := options.saveConfiguration(configuration); err != nil {
-		if previousTokenErr == nil {
-			_ = store.Set(configuration.URL, previousToken)
-		} else {
-			_ = store.Delete(configuration.URL)
-		}
-		return err
-	}
-
-	if previousConfigErr == nil && previousConfiguration.URL != configuration.URL {
-		if err := store.Delete(previousConfiguration.URL); err != nil && !errors.Is(err, errSecretNotFound) {
-			return fmt.Errorf("new credentials saved, but old credential could not be removed: %w", err)
-		}
-	}
-	return nil
+	return options.saveConfiguration(configuration)
 }
 
 func (options *rootOptions) saveConfiguration(configuration storedConfiguration) error {
@@ -207,22 +163,22 @@ func (options *rootOptions) saveConfiguration(configuration storedConfiguration)
 	}
 	data, err := json.MarshalIndent(configuration, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode ActiveCollab configuration: %w", err)
+		return fmt.Errorf("encode ActiveCollab credentials: %w", err)
 	}
 	data = append(data, '\n')
 
 	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return fmt.Errorf("create ActiveCollab configuration directory: %w", err)
+	if err := prepareCredentialDirectory(directory); err != nil {
+		return err
 	}
-	temporary, err := os.CreateTemp(directory, ".config-*")
+	temporary, err := os.CreateTemp(directory, ".credentials-*")
 	if err != nil {
-		return fmt.Errorf("create temporary ActiveCollab configuration: %w", err)
+		return fmt.Errorf("create temporary ActiveCollab credentials file: %w", err)
 	}
 	temporaryName := temporary.Name()
 	defer os.Remove(temporaryName)
 
-	writeErr := temporary.Chmod(0o600)
+	writeErr := protectCredentialPath(temporaryName, false)
 	if writeErr == nil {
 		_, writeErr = temporary.Write(data)
 	}
@@ -231,13 +187,43 @@ func (options *rootOptions) saveConfiguration(configuration storedConfiguration)
 	}
 	closeErr := temporary.Close()
 	if writeErr != nil {
-		return fmt.Errorf("write ActiveCollab configuration: %w", writeErr)
+		return fmt.Errorf("write ActiveCollab credentials: %w", writeErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("close ActiveCollab configuration: %w", closeErr)
+		return fmt.Errorf("close ActiveCollab credentials: %w", closeErr)
 	}
 	if err := replaceFile(temporaryName, path); err != nil {
-		return fmt.Errorf("install ActiveCollab configuration: %w", err)
+		return fmt.Errorf("install ActiveCollab credentials: %w", err)
+	}
+	if err := protectCredentialPath(path, false); err != nil {
+		return fmt.Errorf("protect ActiveCollab credentials: %w", err)
+	}
+	return nil
+}
+
+func prepareCredentialDirectory(directory string) error {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create ActiveCollab credentials directory: %w", err)
+	}
+	if err := protectCredentialPath(directory, true); err != nil {
+		return fmt.Errorf("protect ActiveCollab credentials directory: %w", err)
+	}
+	return nil
+}
+
+func verifyCredentialFile(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("ActiveCollab credentials path must not be a symbolic link")
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("ActiveCollab credentials path is not a regular file")
+	}
+	if err := verifyCredentialProtection(path, info); err != nil {
+		return fmt.Errorf("verify ActiveCollab credentials protection: %w", err)
 	}
 	return nil
 }

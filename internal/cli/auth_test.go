@@ -16,49 +16,14 @@ import (
 	"testing"
 )
 
-type memorySecretStore struct {
-	values   map[string]string
-	probeErr error
-}
-
-func newMemorySecretStore() *memorySecretStore {
-	return &memorySecretStore{values: make(map[string]string)}
-}
-
-func (store *memorySecretStore) Get(key string) (string, error) {
-	value, ok := store.values[key]
-	if !ok {
-		return "", errSecretNotFound
-	}
-	return value, nil
-}
-
-func (store *memorySecretStore) Set(key, value string) error {
-	store.values[key] = value
-	return nil
-}
-
-func (store *memorySecretStore) Delete(key string) error {
-	if _, ok := store.values[key]; !ok {
-		return errSecretNotFound
-	}
-	delete(store.values, key)
-	return nil
-}
-
-func (store *memorySecretStore) Probe() error {
-	return store.probeErr
-}
-
-func authTestOptions(t *testing.T, store secretStore) *rootOptions {
+func authTestOptions(t *testing.T) *rootOptions {
 	t.Helper()
 	t.Setenv("ACTIVECOLLAB_URL", "")
 	t.Setenv("ACTIVECOLLAB_TOKEN", "")
 	return &rootOptions{
-		timeout:     0,
-		version:     "test",
-		secretStore: store,
-		configPath:  filepath.Join(t.TempDir(), "activecollab", "config.json"),
+		timeout:    0,
+		version:    "test",
+		configPath: filepath.Join(t.TempDir(), "activecollab", "credentials.json"),
 	}
 }
 
@@ -97,8 +62,7 @@ func TestAuthLoginIssuesValidatesAndStoresToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	store := newMemorySecretStore()
-	options := authTestOptions(t, store)
+	options := authTestOptions(t)
 	options.promptSecret = func(prompt string) (string, error) {
 		if prompt != "ActiveCollab password: " {
 			t.Fatalf("unexpected secret prompt %q", prompt)
@@ -123,19 +87,19 @@ func TestAuthLoginIssuesValidatesAndStoresToken(t *testing.T) {
 	if strings.Contains(output, token) || strings.Contains(output, password) {
 		t.Fatalf("login output exposed a secret: %s", output)
 	}
-	if got := store.values[server.URL+"/api/v1"]; got != token {
-		t.Fatalf("stored token = %q", got)
-	}
-
 	configurationData, err := os.ReadFile(options.configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(configurationData), token) || strings.Contains(string(configurationData), password) {
-		t.Fatalf("configuration exposed a secret: %s", configurationData)
+	if strings.Contains(string(configurationData), password) {
+		t.Fatalf("credentials file exposed the password: %s", configurationData)
 	}
-	if !strings.Contains(string(configurationData), `"account": "person@example.com"`) {
-		t.Fatalf("configuration is missing account: %s", configurationData)
+	var configuration storedConfiguration
+	if err := json.Unmarshal(configurationData, &configuration); err != nil {
+		t.Fatal(err)
+	}
+	if configuration.Version != credentialsSchemaVersion || configuration.URL != server.URL+"/api/v1" || configuration.Account != "person@example.com" || configuration.Token != token {
+		t.Fatalf("unexpected stored credentials: %#v", configuration)
 	}
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(options.configPath)
@@ -144,6 +108,13 @@ func TestAuthLoginIssuesValidatesAndStoresToken(t *testing.T) {
 		}
 		if permissions := info.Mode().Perm(); permissions != 0o600 {
 			t.Fatalf("configuration permissions = %o", permissions)
+		}
+		directoryInfo, err := os.Stat(filepath.Dir(options.configPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if permissions := directoryInfo.Mode().Perm(); permissions != 0o700 {
+			t.Fatalf("credentials directory permissions = %o", permissions)
 		}
 	}
 
@@ -174,8 +145,7 @@ func TestAuthLoginAcceptsTokenFromStdin(t *testing.T) {
 	}))
 	defer server.Close()
 
-	store := newMemorySecretStore()
-	options := authTestOptions(t, store)
+	options := authTestOptions(t)
 	options.stdin = strings.NewReader(token + "\n")
 	output, err := executeWithOptionsForTest(
 		t,
@@ -194,21 +164,28 @@ func TestAuthLoginAcceptsTokenFromStdin(t *testing.T) {
 	if strings.Contains(output, token) {
 		t.Fatalf("login output exposed token: %s", output)
 	}
-	if got := store.values[server.URL+"/api/v1"]; got != token {
-		t.Fatalf("stored token = %q", got)
+	configuration, err := options.loadConfiguration()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.Token != token {
+		t.Fatalf("stored token = %q", configuration.Token)
 	}
 }
 
-func TestAuthLoginChecksCredentialStoreBeforeIssuingToken(t *testing.T) {
+func TestAuthLoginChecksCredentialFileBeforeIssuingToken(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		requests.Add(1)
 	}))
 	defer server.Close()
 
-	store := newMemorySecretStore()
-	store.probeErr = errors.New("keyring unavailable")
-	options := authTestOptions(t, store)
+	options := authTestOptions(t)
+	blockedParent := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedParent, []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	options.configPath = filepath.Join(blockedParent, "credentials.json")
 	_, err := executeWithOptionsForTest(
 		t,
 		options,
@@ -217,11 +194,11 @@ func TestAuthLoginChecksCredentialStoreBeforeIssuingToken(t *testing.T) {
 		"--email", "person@example.com",
 		"--allow-insecure-http",
 	)
-	if err == nil || !strings.Contains(err.Error(), "OS credential store is unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "prepare protected ActiveCollab credential storage") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if requests.Load() != 0 {
-		t.Fatalf("login made %d requests before credential-store preflight", requests.Load())
+		t.Fatalf("login made %d requests before credential-file preflight", requests.Load())
 	}
 }
 
@@ -233,7 +210,7 @@ func TestAuthLoginFailureDoesNotExposeCredentialsOrResponseBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	options := authTestOptions(t, newMemorySecretStore())
+	options := authTestOptions(t)
 	options.promptSecret = func(string) (string, error) { return password, nil }
 	output, err := executeWithOptionsForTest(
 		t,
@@ -278,10 +255,8 @@ func TestAuthStatusAndLogoutNeverExposeToken(t *testing.T) {
 		baseURL = "https://activecollab.example.com/api/v1"
 		token   = "status-secret-token"
 	)
-	store := newMemorySecretStore()
-	store.values[baseURL] = token
-	options := authTestOptions(t, store)
-	if err := options.saveConfiguration(storedConfiguration{URL: baseURL, Account: "person@example.com"}); err != nil {
+	options := authTestOptions(t)
+	if err := options.saveLoginCredentials(storedConfiguration{URL: baseURL, Account: "person@example.com", Token: token}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -289,7 +264,7 @@ func TestAuthStatusAndLogoutNeverExposeToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(statusOutput, token) || !strings.Contains(statusOutput, `"source":"credential_store"`) {
+	if strings.Contains(statusOutput, token) || !strings.Contains(statusOutput, `"source":"credential_file"`) {
 		t.Fatalf("unexpected status output: %s", statusOutput)
 	}
 
@@ -300,16 +275,13 @@ func TestAuthStatusAndLogoutNeverExposeToken(t *testing.T) {
 	if strings.Contains(logoutOutput, token) || !strings.Contains(logoutOutput, `"remote_token_revoked":false`) {
 		t.Fatalf("unexpected logout output: %s", logoutOutput)
 	}
-	if _, ok := store.values[baseURL]; ok {
-		t.Fatal("logout did not delete token")
-	}
 	if _, err := os.Stat(options.configPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("configuration still exists after logout: %v", err)
 	}
 }
 
 func TestCompleteEnvironmentCredentialsOverrideInvalidStoredConfiguration(t *testing.T) {
-	options := authTestOptions(t, newMemorySecretStore())
+	options := authTestOptions(t)
 	if err := os.MkdirAll(filepath.Dir(options.configPath), 0o700); err != nil {
 		t.Fatal(err)
 	}

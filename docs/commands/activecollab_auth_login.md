@@ -8,9 +8,8 @@ Issue and securely store an API token for a self-hosted ActiveCollab server.
 
 Pass the server's complete /api/v1 URL. By default, login prompts for an email
 address and a password without echoing the password. Use --token-stdin to save
-an existing token supplied by a secret manager. Tokens are stored in the OS
-credential store; only the server URL and account name are written to the
-ActiveCollab configuration file.
+an existing token supplied by a secret manager. The server URL, account name,
+and token are stored in a protected credentials file for the current user.
 
 ```
 activecollab auth login [flags]

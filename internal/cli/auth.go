@@ -47,9 +47,8 @@ func newAuthLoginCommand(options *rootOptions) *cobra.Command {
 
 Pass the server's complete /api/v1 URL. By default, login prompts for an email
 address and a password without echoing the password. Use --token-stdin to save
-an existing token supplied by a secret manager. Tokens are stored in the OS
-credential store; only the server URL and account name are written to the
-ActiveCollab configuration file.`,
+an existing token supplied by a secret manager. The server URL, account name,
+and token are stored in a protected credentials file for the current user.`,
 		Example: `  activecollab auth login --url https://activecollab.example.com/api/v1
   secret-manager-command | activecollab auth login --url https://activecollab.example.com/api/v1 --token-stdin`,
 		Args:              cobra.NoArgs,
@@ -59,8 +58,8 @@ ActiveCollab configuration file.`,
 			if err != nil {
 				return err
 			}
-			if err := options.secrets().Probe(); err != nil {
-				return fmt.Errorf("OS credential store is unavailable; use ACTIVECOLLAB_TOKEN instead: %w", err)
+			if err := options.prepareCredentialStorage(); err != nil {
+				return fmt.Errorf("prepare protected ActiveCollab credential storage: %w", err)
 			}
 
 			account := strings.TrimSpace(email)
@@ -90,14 +89,14 @@ ActiveCollab configuration file.`,
 			if err != nil {
 				return fmt.Errorf("validate ActiveCollab token: %w", err)
 			}
-			if err := options.saveLoginCredentials(storedConfiguration{URL: normalizedURL, Account: account}, token); err != nil {
+			if err := options.saveLoginCredentials(storedConfiguration{URL: normalizedURL, Account: account, Token: token}); err != nil {
 				return err
 			}
 			return writeOutput(options.json, map[string]any{
 				"authenticated": true,
 				"url":           normalizedURL,
 				"account":       account,
-				"storage":       "os_credential_store",
+				"storage":       "credential_file",
 				"server":        info,
 			})
 		},
@@ -138,35 +137,27 @@ func newAuthLogoutCommand(options *rootOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove locally stored ActiveCollab credentials",
-		Long: `Remove the token from the OS credential store and delete the local
-configuration. This does not revoke the token on the ActiveCollab server and
-cannot clear ACTIVECOLLAB_URL or ACTIVECOLLAB_TOKEN in the parent shell.`,
+		Long: `Delete the local ActiveCollab credentials file. This does not revoke
+the token on the ActiveCollab server and cannot clear ACTIVECOLLAB_URL or
+ACTIVECOLLAB_TOKEN in the parent shell.`,
 		Example: `  activecollab auth logout
   activecollab auth logout --json`,
 		Args:              cobra.NoArgs,
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			configuration, err := options.loadConfiguration()
-			if errors.Is(err, os.ErrNotExist) {
+			path, err := options.configurationPath()
+			if err != nil {
+				return err
+			}
+			if err := os.Remove(path); errors.Is(err, os.ErrNotExist) {
 				return writeOutput(options.json, map[string]any{
 					"logged_out":                      true,
 					"stored_credentials_removed":      false,
 					"environment_credentials_present": environmentCredentialsPresent(),
 					"remote_token_revoked":            false,
 				})
-			}
-			if err != nil {
-				return err
-			}
-			if err := options.secrets().Delete(configuration.URL); err != nil && !errors.Is(err, errSecretNotFound) {
-				return fmt.Errorf("remove ActiveCollab token from OS credential store: %w", err)
-			}
-			path, err := options.configurationPath()
-			if err != nil {
-				return err
-			}
-			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("remove ActiveCollab configuration: %w", err)
+			} else if err != nil {
+				return fmt.Errorf("remove ActiveCollab credentials file: %w", err)
 			}
 			return writeOutput(options.json, map[string]any{
 				"logged_out":                      true,

@@ -7,20 +7,20 @@ Release binaries are self-contained and do not require Go at runtime.
 Install globally:
 
 ```bash
-mise use --global github:microHoffman/activecollab-cli@0.2.0
+mise use --global github:microHoffman/activecollab-cli@0.3.0
 activecollab version
 ```
 
 Omit `--global` to pin the CLI in a project's `mise.toml`:
 
 ```bash
-mise use github:microHoffman/activecollab-cli@0.2.0
+mise use github:microHoffman/activecollab-cli@0.3.0
 ```
 
 Upgrade by selecting a newer version with `mise use`. Remove it with:
 
 ```bash
-mise uninstall github:microHoffman/activecollab-cli@0.2.0
+mise uninstall github:microHoffman/activecollab-cli@0.3.0
 ```
 
 ## Linux without mise
@@ -28,7 +28,7 @@ mise uninstall github:microHoffman/activecollab-cli@0.2.0
 Choose `amd64` for x86-64 or `arm64` for 64-bit ARM:
 
 ```bash
-version=0.2.0
+version=0.3.0
 arch=amd64
 archive="activecollab_${version}_linux_${arch}.tar.gz"
 base="https://github.com/microHoffman/activecollab-cli/releases/download/v${version}"
@@ -52,7 +52,7 @@ rm "${HOME}/.local/bin/activecollab"
 Choose `arm64` for Apple Silicon or `amd64` for Intel:
 
 ```bash
-version=0.2.0
+version=0.3.0
 arch=arm64
 archive="activecollab_${version}_darwin_${arch}.tar.gz"
 base="https://github.com/microHoffman/activecollab-cli/releases/download/v${version}"
@@ -73,7 +73,7 @@ Remove `~/.local/bin/activecollab` to uninstall.
 Choose `amd64` for x86-64 or `arm64` for Windows on ARM. In PowerShell:
 
 ```powershell
-$Version = "0.2.0"
+$Version = "0.3.0"
 $Arch = "amd64"
 $Archive = "activecollab_${Version}_windows_${Arch}.zip"
 $Base = "https://github.com/microHoffman/activecollab-cli/releases/download/v${Version}"
@@ -98,7 +98,7 @@ Add `$HOME\bin` to the user `PATH`. Delete `activecollab.exe` to uninstall.
 With Go 1.25 or newer:
 
 ```bash
-go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.2.0
+go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.3.0
 ```
 
 Ensure `GOBIN`, or `$(go env GOPATH)/bin`, is on `PATH`.
@@ -115,20 +115,25 @@ activecollab info
 ```
 
 The CLI prompts for the account email and a hidden password, obtains a token
-from the self-hosted `/issue-token` endpoint, validates it, and stores it in the
-platform credential store. See ActiveCollab's
+from the self-hosted `/issue-token` endpoint, validates it, and stores it in a
+protected per-user credentials file. See ActiveCollab's
 [self-hosted authentication documentation](https://activecollab.com/help/books/self-hosted/self-hosted-api-authentication)
 for the server-side flow.
 
-Credential storage uses:
+The credentials file contains the server URL, account email, and API token. Its
+default location follows each platform's user configuration convention:
 
-- Linux: Secret Service-compatible keyring
-- macOS: Keychain
-- Windows: Credential Manager
+- Linux: `$XDG_CONFIG_HOME/activecollab/credentials.json`, or
+  `$HOME/.config/activecollab/credentials.json` when `XDG_CONFIG_HOME` is unset
+- macOS: `$HOME/Library/Application Support/activecollab/credentials.json`
+- Windows: `%AppData%\activecollab\credentials.json`
 
-The CLI configuration file contains only the server URL and account email. If
-the platform credential store is unavailable, the command fails before asking
-for a password or issuing a token.
+On Linux and macOS, the directory is restricted to mode `0700` and the file to
+`0600`. On Windows, inherited permissions are disabled and access is limited to
+the current user, SYSTEM, and Administrators. The CLI verifies that protected
+storage can be created before asking for a password or issuing a token. The
+file is access-controlled, not encrypted separately; protect the operating
+system account and revoke the token if that account is compromised.
 
 To save an existing token, pipe it from a secret manager:
 
@@ -138,8 +143,8 @@ secret-manager-command | activecollab auth login \
   --token-stdin
 ```
 
-For CI and headless machines, set credentials in a protected environment. They
-override saved login credentials:
+For CI and ephemeral machines, credentials can instead be supplied in a
+protected environment. They override saved login credentials:
 
 ```bash
 export ACTIVECOLLAB_URL="https://activecollab.example.com/api/v1"

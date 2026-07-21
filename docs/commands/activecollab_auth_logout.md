@@ -4,9 +4,9 @@ Remove locally stored ActiveCollab credentials
 
 ### Synopsis
 
-Remove the token from the OS credential store and delete the local
-configuration. This does not revoke the token on the ActiveCollab server and
-cannot clear ACTIVECOLLAB_URL or ACTIVECOLLAB_TOKEN in the parent shell.
+Delete the local ActiveCollab credentials file. This does not revoke
+the token on the ActiveCollab server and cannot clear ACTIVECOLLAB_URL or
+ACTIVECOLLAB_TOKEN in the parent shell.
 
 ```
 activecollab auth logout [flags]

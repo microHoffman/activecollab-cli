@@ -35,7 +35,7 @@ npx skills add https://github.com/microHoffman/agent-skills \
 - upload and safely download task/comment attachments
 - preview mutations with `--dry-run`
 - emit machine-readable output with `--json`
-- issue and store self-hosted API tokens through the OS credential store
+- issue and store self-hosted API tokens in a protected per-user file
 
 Deletion, arbitrary raw API requests, invoicing, and time tracking are outside
 the initial scope.
@@ -45,7 +45,7 @@ the initial scope.
 With [mise](https://mise.jdx.dev/dev-tools/backends/github.html):
 
 ```bash
-mise use --global github:microHoffman/activecollab-cli@0.2.0
+mise use --global github:microHoffman/activecollab-cli@0.3.0
 activecollab version
 ```
 
@@ -57,7 +57,7 @@ Exact Linux, macOS, Windows, and source installation instructions are in
 Go users can install from source:
 
 ```bash
-go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.2.0
+go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.3.0
 ```
 
 ## Documentation
@@ -80,9 +80,10 @@ activecollab info
 ```
 
 The login command prompts for the account email and a hidden password, requests
-an API token from the self-hosted server, and saves that token in the operating
-system credential store. Only the non-secret server URL and account email are
-written to the CLI configuration file. HTTPS is required unless
+an API token from the self-hosted server, and saves the server URL, account,
+and token in a protected per-user credentials file. The credentials directory
+and file use owner-only permissions on Linux and macOS; Windows uses a protected
+DACL for the current user, SYSTEM, and Administrators. HTTPS is required unless
 `--allow-insecure-http` is explicitly passed. This follows ActiveCollab's
 [self-hosted authentication flow](https://activecollab.com/help/books/self-hosted/self-hosted-api-authentication).
 
@@ -99,8 +100,8 @@ Use `activecollab auth status` to inspect the active source without exposing
 the token. `activecollab auth logout` removes the local credential but does not
 revoke it on the server.
 
-For CI, headless hosts without an OS credential store, or ephemeral sessions,
-environment variables remain supported and override saved credentials:
+For CI or ephemeral sessions, environment variables remain supported and
+override saved credentials:
 
 ```bash
 export ACTIVECOLLAB_URL="https://activecollab.example.com/api/v1"
@@ -120,6 +121,10 @@ activecollab task list --project 7
 # A pasted task URL supplies both IDs
 activecollab task get \
   https://activecollab.example.com/projects/7/tasks/22
+
+# Frontend modal links are accepted too (Task-{task_id}-{project_id})
+activecollab task get \
+  'https://activecollab.example.com/my-work?modal=Task-22-7'
 
 # A numeric task ID requires its project
 activecollab task get 22 --project 7 --json

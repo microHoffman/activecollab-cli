@@ -223,6 +223,20 @@ func TestResolveTaskRefNormalizesDefaultPort(t *testing.T) {
 	}
 }
 
+func TestResolveTaskRefAcceptsFrontendModalURL(t *testing.T) {
+	client, err := NewClient(Config{BaseURL: "https://projekty.tomatom.cz/api/v1", Token: testToken})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := client.ResolveTaskRef("https://projekty.tomatom.cz/my-work?modal=Task-17905-173", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != (TaskRef{ProjectID: 173, TaskID: 17905}) {
+		t.Fatalf("task ref = %#v", ref)
+	}
+}
+
 func TestGetTaskRejectsMismatchedIdentity(t *testing.T) {
 	tests := []struct {
 		name     string

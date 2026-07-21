@@ -15,8 +15,9 @@ activecollab auth login \
 ```
 
 The CLI prompts for an email and hidden password, issues a token, validates it,
-and stores it in the OS credential store. It refuses to transmit credentials
-over plain HTTP unless `--allow-insecure-http` is explicitly passed.
+and stores it in a protected per-user credentials file. It refuses to transmit
+credentials over plain HTTP unless `--allow-insecure-http` is explicitly
+passed.
 
 To use an existing API token, pipe it from a secret manager:
 
@@ -33,8 +34,8 @@ activecollab auth status
 activecollab auth status --json
 ```
 
-Environment variables remain available for CI and hosts without an OS
-credential store. They override saved credentials:
+Environment variables remain available for CI and ephemeral sessions. They
+override saved credentials:
 
 ```bash
 export ACTIVECOLLAB_URL="https://activecollab.example.com/api/v1"
@@ -74,11 +75,16 @@ Commands that identify a task accept either:
 activecollab task get \
   https://activecollab.example.com/projects/7/tasks/22
 
+activecollab task get \
+  'https://activecollab.example.com/my-work?modal=Task-22-7'
+
 activecollab task get 22 --project 7
 ```
 
-Full URLs are preferable when they are available. The CLI verifies that their
-origin matches the configured ActiveCollab URL before attaching credentials.
+Canonical `/projects/{project_id}/tasks/{task_id}` URLs and frontend
+`?modal=Task-{task_id}-{project_id}` URLs are supported. Full URLs are
+preferable when available. The CLI verifies that their origin matches the
+configured ActiveCollab URL before attaching credentials.
 
 ## Read complete task context
 
