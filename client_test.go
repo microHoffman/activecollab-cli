@@ -566,12 +566,11 @@ func TestMutationEndpointContracts(t *testing.T) {
 	}
 }
 
-func TestDownloadAttachmentUsesReturnedURLAndChecksOrigin(t *testing.T) {
+func TestDownloadAttachmentUsesAPIEndpoint(t *testing.T) {
 	var paths []string
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
-		if r.URL.Path != "/attachments/31/download" && r.URL.Path != "/api/v1/attachments/31/download" {
+		if r.URL.Path != "/api/v1/attachments/31/download" {
 			t.Fatalf("download path = %q", r.URL.Path)
 		}
 		if got := r.Header.Get("X-Angie-AuthApiToken"); got != testToken {
@@ -587,29 +586,19 @@ func TestDownloadAttachmentUsesReturnedURLAndChecksOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	result, err := client.DownloadAttachment(context.Background(), Attachment{ID: 31, DownloadURL: server.URL + "/attachments/31/download"}, &output)
+	result, err := client.DownloadAttachment(context.Background(), Attachment{
+		ID:          31,
+		DownloadURL: server.URL + "/proxy.php?proxy=download_file&i=--DOWNLOAD-TOKEN--",
+	}, &output)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if output.String() != "abc" || result.Size != 3 || result.ContentType != "text/plain" {
 		t.Fatalf("output = %q, result = %#v", output.String(), result)
 	}
-	output.Reset()
-	result, err = client.DownloadAttachment(context.Background(), Attachment{ID: 31}, &output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if output.String() != "abc" || result.Size != 3 {
-		t.Fatalf("fallback output = %q, result = %#v", output.String(), result)
-	}
-	wantPaths := []string{"/attachments/31/download", "/api/v1/attachments/31/download"}
+	wantPaths := []string{"/api/v1/attachments/31/download"}
 	if !reflect.DeepEqual(paths, wantPaths) {
 		t.Fatalf("download paths = %#v, want %#v", paths, wantPaths)
-	}
-
-	_, err = client.DownloadAttachment(context.Background(), Attachment{ID: 31, DownloadURL: "https://foreign.example/attachments/31/download"}, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "different origin") {
-		t.Fatalf("unexpected foreign-origin error: %v", err)
 	}
 }
 

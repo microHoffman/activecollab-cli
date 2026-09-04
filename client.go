@@ -391,15 +391,12 @@ func (c *Client) DownloadAttachment(ctx context.Context, attachment Attachment, 
 	if attachment.ID <= 0 {
 		return DownloadResult{}, fmt.Errorf("attachment ID must be positive")
 	}
-	location := strings.TrimSpace(attachment.DownloadURL)
-	if location == "" {
-		baseURL := c.transport.BaseURL()
-		baseURL.Path = strings.TrimRight(baseURL.Path, "/") + fmt.Sprintf("/attachments/%d/download", attachment.ID)
-		baseURL.RawPath = ""
-		baseURL.RawQuery = ""
-		baseURL.Fragment = ""
-		location = baseURL.String()
-	}
+	baseURL := c.transport.BaseURL()
+	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + fmt.Sprintf("/attachments/%d/download", attachment.ID)
+	baseURL.RawPath = ""
+	baseURL.RawQuery = ""
+	baseURL.Fragment = ""
+	location := baseURL.String()
 	body, contentLength, contentType, err := c.transport.Download(ctx, location)
 	if err != nil {
 		return DownloadResult{}, normalizeError(err)

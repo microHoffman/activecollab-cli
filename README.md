@@ -45,7 +45,7 @@ the initial scope.
 With [mise](https://mise.jdx.dev/dev-tools/backends/github.html):
 
 ```bash
-mise use --global github:microHoffman/activecollab-cli@0.3.0
+mise use --global github:microHoffman/activecollab-cli@0.3.1
 activecollab version
 ```
 
@@ -57,7 +57,7 @@ Exact Linux, macOS, Windows, and source installation instructions are in
 Go users can install from source:
 
 ```bash
-go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.3.0
+go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.3.1
 ```
 
 ## Documentation

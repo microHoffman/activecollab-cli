@@ -20,7 +20,7 @@
         "name": "specification.txt",
         "mime_type": "text/plain",
         "size": 42,
-        "download_url": "https://activecollab.example/attachments/31/download"
+        "download_url": "https://activecollab.example/proxy.php?proxy=download_file&module=system&context=attachments&id=31&i=--DOWNLOAD-TOKEN--"
       }
     ],
     "future_additive_field": "ignored safely"
@@ -39,7 +39,7 @@
           "name": "comment-log.txt",
           "mime_type": "text/plain",
           "size": 12,
-          "download_url": "https://activecollab.example/attachments/32/download"
+          "download_url": "https://activecollab.example/proxy.php?proxy=download_file&module=system&context=attachments&id=32&i=--DOWNLOAD-TOKEN--"
         }
       ]
     }

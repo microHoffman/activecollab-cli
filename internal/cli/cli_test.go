@@ -480,8 +480,8 @@ func TestAttachmentDownloadChecksOwnershipAndWritesAtomically(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/projects/7/tasks/22":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"single":{"id":22,"project_id":7,"name":"Task","attachments":[{"id":31,"name":"spec.txt","size":3,"download_url":"`+server.URL+`/attachments/31/download"}]},"comments":[],"subtasks":[]}`)
-		case "/attachments/31/download":
+			_, _ = io.WriteString(w, `{"single":{"id":22,"project_id":7,"name":"Task","attachments":[{"id":31,"name":"spec.txt","size":3,"download_url":"`+server.URL+`/proxy.php?proxy=download_file&i=--DOWNLOAD-TOKEN--"}]},"comments":[],"subtasks":[]}`)
+		case "/api/v1/attachments/31/download":
 			w.Header().Set("Content-Type", "text/plain")
 			_, _ = io.WriteString(w, "abc")
 		default:
@@ -499,7 +499,7 @@ func TestAttachmentDownloadChecksOwnershipAndWritesAtomically(t *testing.T) {
 	if got, err := os.ReadFile(outputPath); err != nil || string(got) != "abc" {
 		t.Fatalf("downloaded file = %q, err = %v", got, err)
 	}
-	wantPaths := []string{"/api/v1/projects/7/tasks/22", "/attachments/31/download"}
+	wantPaths := []string{"/api/v1/projects/7/tasks/22", "/api/v1/attachments/31/download"}
 	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
 		t.Fatalf("paths = %#v, want %#v", paths, wantPaths)
 	}

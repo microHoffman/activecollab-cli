@@ -7,20 +7,20 @@ Release binaries are self-contained and do not require Go at runtime.
 Install globally:
 
 ```bash
-mise use --global github:microHoffman/activecollab-cli@0.3.0
+mise use --global github:microHoffman/activecollab-cli@0.3.1
 activecollab version
 ```
 
 Omit `--global` to pin the CLI in a project's `mise.toml`:
 
 ```bash
-mise use github:microHoffman/activecollab-cli@0.3.0
+mise use github:microHoffman/activecollab-cli@0.3.1
 ```
 
 Upgrade by selecting a newer version with `mise use`. Remove it with:
 
 ```bash
-mise uninstall github:microHoffman/activecollab-cli@0.3.0
+mise uninstall github:microHoffman/activecollab-cli@0.3.1
 ```
 
 ## Linux without mise
@@ -28,7 +28,7 @@ mise uninstall github:microHoffman/activecollab-cli@0.3.0
 Choose `amd64` for x86-64 or `arm64` for 64-bit ARM:
 
 ```bash
-version=0.3.0
+version=0.3.1
 arch=amd64
 archive="activecollab_${version}_linux_${arch}.tar.gz"
 base="https://github.com/microHoffman/activecollab-cli/releases/download/v${version}"
@@ -52,7 +52,7 @@ rm "${HOME}/.local/bin/activecollab"
 Choose `arm64` for Apple Silicon or `amd64` for Intel:
 
 ```bash
-version=0.3.0
+version=0.3.1
 arch=arm64
 archive="activecollab_${version}_darwin_${arch}.tar.gz"
 base="https://github.com/microHoffman/activecollab-cli/releases/download/v${version}"
@@ -73,7 +73,7 @@ Remove `~/.local/bin/activecollab` to uninstall.
 Choose `amd64` for x86-64 or `arm64` for Windows on ARM. In PowerShell:
 
 ```powershell
-$Version = "0.3.0"
+$Version = "0.3.1"
 $Arch = "amd64"
 $Archive = "activecollab_${Version}_windows_${Arch}.zip"
 $Base = "https://github.com/microHoffman/activecollab-cli/releases/download/v${Version}"
@@ -98,7 +98,7 @@ Add `$HOME\bin` to the user `PATH`. Delete `activecollab.exe` to uninstall.
 With Go 1.25 or newer:
 
 ```bash
-go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.3.0
+go install github.com/microHoffman/activecollab-cli/cmd/activecollab@v0.3.1
 ```
 
 Ensure `GOBIN`, or `$(go env GOPATH)/bin`, is on `PATH`.
